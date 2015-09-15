@@ -5,6 +5,8 @@ Example use...
 
 ```pascal
 procedure TForm1.Button1Click(Sender: TObject);
+const
+  CR = #13#10;
 var
   ASES: IksSES;
   ASenders: TStrings;
@@ -23,5 +25,11 @@ begin
   finally
     ASenders.Free;
   end;
+  
+  // send an email...
+  ASes.SendEmail('graham@kernow-software.co.uk',
+                 'person@somewhere.com',
+                 'the subject',
+                 'first line of the body :-)'+CR+CR+'second line of the body');
 end;
 ```
