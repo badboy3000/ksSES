@@ -54,6 +54,7 @@ type
     procedure DeleteIdentity(AIdentity: string);
     procedure GetSenders(ASenders: TStrings; AVerifiedOnly: Boolean);
     procedure VerifyEmailIdentity(AEmail: string);
+    procedure SendEmail(AFrom, ATo, ASubject, ABody: string);
     property Endpoint: TksSESEndpoint read GetEndpoint write SetEndpoint;
   end;
 
@@ -87,6 +88,7 @@ type
     procedure DeleteIdentity(AIdentity: string);
     procedure GetSenders(ASenders: TStrings; AVerifiedOnly: Boolean);
     procedure VerifyEmailIdentity(AEmail: string);
+    procedure SendEmail(AFrom, ATo, ASubject, ABody: string);
     property Endpoint: TksSESEndpoint read GetEndpoint write SetEndpoint;
   public
     constructor Create(AEndpoint: TksSESEndpoint; APublicKey, APrivateKey: string);
@@ -255,6 +257,22 @@ begin
     Result := AStrings.IndexOf(LowerCase(AEmail)) > -1;
   finally
     AStrings.Free;
+  end;
+end;
+
+procedure TksSES.SendEmail(AFrom, ATo, ASubject, ABody: string);
+var
+  AParams: TStrings;
+begin
+  AParams := TStringList.Create;
+  try
+    AParams.Values['Source'] := AFrom;
+    AParams.Values['Destination.ToAddresses.member.1'] := ATo;
+    AParams.Values['Message.Subject.Data'] := ASubject;
+    AParams.Values['Message.Body.Text.Data'] := ABody;
+    ExecuteCommand('SendEmail', AParams);
+  finally
+    AParams.Free;
   end;
 end;
 
