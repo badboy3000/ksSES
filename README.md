@@ -3,7 +3,8 @@ Delphi interface to Amazon SES (Simple Email Service)
 
 Example uses...
 
-##### Vefify a new email address
+
+#### Vefify a new email address
 ```pascal
 procedure TForm1.Button1Click(Sender: TObject);
 var
@@ -15,7 +16,8 @@ begin
   ASES.VerifyEmailIdentity('graham@kernow-software.co.uk');
 end;
 ```
-##### Get all verified senders
+
+#### Get all verified senders
 ```pascal
 procedure TForm1.Button1Click(Sender: TObject);
 var
@@ -35,7 +37,8 @@ begin
   end;
 end;
 ```
-##### Send an email
+
+#### Send an email
 ```pascal
 procedure TForm1.Button1Click(Sender: TObject);
 const
