@@ -45,6 +45,26 @@ type
     SentLast24Hours: Extended;
   end;
 
+ IksSesMessageDestination = interface
+  ['{E72991E5-8C97-46B3-84BA-39E497FF86D7}']
+    function GetBccList: TStrings;
+    function GetCcList: TStrings;
+    function GetReipients: TStrings;
+    property BccList: TStrings read GetBccList;
+    property CcList: TStrings read GetCcList;
+    property Recipients: TStrings read GetReipients;
+  end;
+
+  IksSesMessage = interface
+  ['{21287B27-35CE-473E-8AB0-88809492E72F}']
+    function GetBody: string;
+    function GetSubject: string;
+    procedure SetBody(const Value: string);
+    procedure SetSubject(const Value: string);
+    property Body: string read GetBody write SetBody;
+    property Subject: string read GetSubject write SetSubject;
+  end;
+
   IksSES = interface
   ['{79EE7247-AF52-40C8-B230-321B4AF06F2C}']
     function GetEndpoint: TksSESEndpoint;
@@ -54,11 +74,16 @@ type
     procedure DeleteIdentity(AIdentity: string);
     procedure GetSenders(ASenders: TStrings; AVerifiedOnly: Boolean);
     procedure VerifyEmailIdentity(AEmail: string);
-    procedure SendEmail(AFrom, ATo, ASubject, ABody: string);
+    procedure SendEmail(AFrom, ATo, ASubject, ABody: string); overload;
+    procedure SendEmail(AFrom: string;
+                        ADestination: IksSesMessageDestination;
+                        AMessage: IksSesMessage); overload;
     property Endpoint: TksSESEndpoint read GetEndpoint write SetEndpoint;
   end;
 
   function CreateSes(AEndpoint: TksSESEndpoint; APublicKey, APrivateKey: string): IksSES;
+  function CreateSesMessage: IksSesMessage;
+  function CreateSesMessageDestination: IksSesMessageDestination;
 
 
 implementation
@@ -66,6 +91,36 @@ implementation
 uses DateUtils, ComObj, XMLIntf, XMLDoc, synacode;
 
 type
+  TksSesMessageDestination = class(TInterfacedObject, IksSesMessageDestination)
+  private
+    FBccList: TStrings;
+    FCcList: TStrings;
+    FRecipients: TStrings;
+    function GetBccList: TStrings;
+    function GetCcList: TStrings;
+    function GetReipients: TStrings;
+  protected
+    property BccList: TStrings read GetBccList;
+    property CcList: TStrings read GetCcList;
+    property Recipients: TStrings read GetReipients;
+  public
+    constructor Create;
+    destructor Destroy; override;
+  end;
+
+  TksSesMessage = class(TInterfacedObject, IksSesMessage)
+  private
+    FBody: string;
+    FSubject: string;
+    function GetBody: string;
+    function GetSubject: string;
+    procedure SetBody(const Value: string);
+    procedure SetSubject(const Value: string);
+  protected
+    property Body: string read GetBody write SetBody;
+    property Subject: string read GetSubject write SetSubject;
+  end;
+
 
   TksSES = class(TInterfacedObject, IksSes)
   private
@@ -88,7 +143,10 @@ type
     procedure DeleteIdentity(AIdentity: string);
     procedure GetSenders(ASenders: TStrings; AVerifiedOnly: Boolean);
     procedure VerifyEmailIdentity(AEmail: string);
-    procedure SendEmail(AFrom, ATo, ASubject, ABody: string);
+    procedure SendEmail(AFrom, ATo, ASubject, ABody: string); overload;
+    procedure SendEmail(AFrom: string;
+                        ADestination: IksSesMessageDestination;
+                        AMessage: IksSesMessage); overload;
     property Endpoint: TksSESEndpoint read GetEndpoint write SetEndpoint;
   public
     constructor Create(AEndpoint: TksSESEndpoint; APublicKey, APrivateKey: string);
@@ -97,11 +155,22 @@ type
   end;
 
 
+
+
 function CreateSes(AEndpoint: TksSESEndpoint; APublicKey, APrivateKey: string): IksSES;
 begin
   Result := TksSES.Create(AEndpoint, APublicKey, APrivateKey);
 end;
 
+function CreateSesMessage: IksSesMessage;
+begin
+  Result := TksSesMessage.Create;
+end;
+
+function CreateSesMessageDestination: IksSesMessageDestination;
+begin
+  Result := TksSesMessageDestination.Create;
+end;
 
 constructor TksSES.Create(AEndpoint: TksSESEndpoint; APublicKey, APrivateKey: string);
 begin
@@ -141,10 +210,9 @@ function TksSES.ExecuteCommand(ACmd: string; AParams: TStrings): string;
 var
   AResponse: IHTTPResponse;
   ADate: string;
-  ASig: string;
+  ASig: AnsiString;
   ICount: integer;
   AStr: string;
-  s1, s2: string;
 begin
   FHttp := TNetHTTPClient.Create(nil);
   FParams.Clear;
@@ -157,7 +225,7 @@ begin
     FHttp.CustomHeaders['Date'] := ADate;
     FHttp.CustomHeaders['Host'] := GetEndpointStr;
     FHttp.CustomHeaders['Content-Type'] := 'application/x-www-form-urlencoded';
-    FHttp.CustomHeaders['X-Amzn-Authorization'] := 'AWS3-HTTPS AWSAccessKeyId='+FPublickey+', Algorithm=HmacSHA1, Signature='+ASig;
+    FHttp.CustomHeaders['X-Amzn-Authorization'] := 'AWS3-HTTPS AWSAccessKeyId='+FPublickey+', Algorithm=HmacSHA1, Signature='+string(ASig);
     AStr := '';
     for ICount := 0 to FParams.Count-1 do
     begin
@@ -262,14 +330,37 @@ end;
 
 procedure TksSES.SendEmail(AFrom, ATo, ASubject, ABody: string);
 var
+  AMessage: IksSesMessage;
+  ADestination: IksSesMessageDestination;
+begin
+  AMessage := CreateSesMessage;
+  ADestination := CreateSesMessageDestination;
+
+  ADestination.Recipients.Add(ATo);
+  AMessage.Subject := ASubject;
+  AMessage.Body := ABody;
+  SendEmail(AFrom, ADestination, AMessage);
+end;
+
+procedure TksSES.SendEmail(AFrom: string;
+                           ADestination: IksSesMessageDestination;
+                           AMessage: IksSesMessage);
+
+var
   AParams: TStrings;
+  ICount: integer;
 begin
   AParams := TStringList.Create;
   try
     AParams.Values['Source'] := AFrom;
-    AParams.Values['Destination.ToAddresses.member.1'] := ATo;
-    AParams.Values['Message.Subject.Data'] := ASubject;
-    AParams.Values['Message.Body.Text.Data'] := ABody;
+    for ICount := 1 to ADestination.Recipients.Count do
+      AParams.Values['Destination.ToAddresses.member.'+IntToStr(ICount)] := ADestination.Recipients[ICount-1];
+    for ICount := 1 to ADestination.CcList.Count do
+      AParams.Values['Destination.CcAddresses.member.'+IntToStr(ICount)] := ADestination.CcList[ICount-1];
+    for ICount := 1 to ADestination.BccList.Count do
+      AParams.Values['Destination.BccAddresses.member.'+IntToStr(ICount)] := ADestination.BccList[ICount-1];
+    AParams.Values['Message.Subject.Data'] := AMessage.Subject;
+    AParams.Values['Message.Body.Text.Data'] := AMessage.Body;
     ExecuteCommand('SendEmail', AParams);
   finally
     AParams.Free;
@@ -292,6 +383,60 @@ begin
   finally
     AParams.Free;
   end;
+end;
+
+{ TksSesMessage }
+
+function TksSesMessage.GetBody: string;
+begin
+  Result := FBody;
+end;
+
+function TksSesMessage.GetSubject: string;
+begin
+  Result := FSubject;
+end;
+
+procedure TksSesMessage.SetBody(const Value: string);
+begin
+  FBody := Value;
+end;
+
+procedure TksSesMessage.SetSubject(const Value: string);
+begin
+  FSubject := Value;
+end;
+
+{ TksSesMessageDestination }
+
+constructor TksSesMessageDestination.Create;
+begin
+  FBccList := TStringList.Create;
+  FCcList := TStringList.Create;
+  FRecipients := TStringList.Create;
+end;
+
+destructor TksSesMessageDestination.Destroy;
+begin
+  FBccList.Free;
+  FCcList.Free;
+  FRecipients.Free;
+  inherited;
+end;
+
+function TksSesMessageDestination.GetBccList: TStrings;
+begin
+  Result := FBccList;
+end;
+
+function TksSesMessageDestination.GetCcList: TStrings;
+begin
+  Result := FCcList;
+end;
+
+function TksSesMessageDestination.GetReipients: TStrings;
+begin
+  Result := FRecipients;
 end;
 
 end.
