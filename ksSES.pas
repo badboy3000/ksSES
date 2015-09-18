@@ -45,17 +45,12 @@ type
     SentLast24Hours: Extended;
   end;
 
-  IksSesMessageContent = interface
-  ['{ED3D766F-8848-4DDB-AEC2-64B2BF7E83DD}']
-    function GetCharset: string;
-    function GetData: string;
-    procedure SetCharset(const Value: string);
-    procedure SetData(const Value: string);
-    property Charset: string read GetCharset write SetCharset;
-    property Data: string read GetData write SetData;
+  IksSesBaseDataType = interface
+  ['{73EC04FE-289A-4732-8196-4D8D65DE45DF}']
+    procedure PopulateStrings(AStrings: TStrings);
   end;
 
-  IksSesMessageDestination = interface
+  IksSesMessageDestination = interface(IksSesBaseDataType)
   ['{E72991E5-8C97-46B3-84BA-39E497FF86D7}']
     function GetBccList: TStrings;
     function GetCcList: TStrings;
@@ -65,7 +60,7 @@ type
     property Recipients: TStrings read GetReipients;
   end;
 
-  IksSesMessage = interface
+  IksSesMessage = interface(IksSesBaseDataType)
   ['{21287B27-35CE-473E-8AB0-88809492E72F}']
     function GetBody: string;
     function GetSubject: string;
@@ -101,20 +96,12 @@ implementation
 uses DateUtils, ComObj, XMLIntf, XMLDoc, synacode;
 
 type
-  TksSesMessageContent = class(TInterfacedObject, IksSesMessageContent)
-  private
-    FCharset: string;
-    FData: string;
-    function GetCharset: string;
-    function GetData: string;
-    procedure SetCharset(const Value: string);
-    procedure SetData(const Value: string);
+  TksSesBaseObject = class(TInterfacedObject, IksSesBaseDataType)
   protected
-    property Charset: string read GetCharset write SetCharset;
-    property Data: string read GetData write SetData;
+    procedure PopulateStrings(AStrings: TStrings); virtual;
   end;
 
-  TksSesMessageDestination = class(TInterfacedObject, IksSesMessageDestination)
+  TksSesMessageDestination = class(TksSesBaseObject, IksSesMessageDestination)
   private
     FBccList: TStrings;
     FCcList: TStrings;
@@ -123,6 +110,7 @@ type
     function GetCcList: TStrings;
     function GetReipients: TStrings;
   protected
+    procedure PopulateStrings(AStrings: TStrings); override;
     property BccList: TStrings read GetBccList;
     property CcList: TStrings read GetCcList;
     property Recipients: TStrings read GetReipients;
@@ -131,7 +119,7 @@ type
     destructor Destroy; override;
   end;
 
-  TksSesMessage = class(TInterfacedObject, IksSesMessage)
+  TksSesMessage = class(TksSesBaseObject, IksSesMessage)
   private
     FBody: string;
     FSubject: string;
@@ -140,6 +128,7 @@ type
     procedure SetBody(const Value: string);
     procedure SetSubject(const Value: string);
   protected
+    procedure PopulateStrings(AStrings: TStrings); override;
     property Body: string read GetBody write SetBody;
     property Subject: string read GetSubject write SetSubject;
   end;
@@ -371,19 +360,12 @@ procedure TksSES.SendEmail(AFrom: string;
 
 var
   AParams: TStrings;
-  ICount: integer;
 begin
   AParams := TStringList.Create;
   try
     AParams.Values['Source'] := AFrom;
-    for ICount := 1 to ADestination.Recipients.Count do
-      AParams.Values['Destination.ToAddresses.member.'+IntToStr(ICount)] := ADestination.Recipients[ICount-1];
-    for ICount := 1 to ADestination.CcList.Count do
-      AParams.Values['Destination.CcAddresses.member.'+IntToStr(ICount)] := ADestination.CcList[ICount-1];
-    for ICount := 1 to ADestination.BccList.Count do
-      AParams.Values['Destination.BccAddresses.member.'+IntToStr(ICount)] := ADestination.BccList[ICount-1];
-    AParams.Values['Message.Subject.Data'] := AMessage.Subject;
-    AParams.Values['Message.Body.Text.Data'] := AMessage.Body;
+    ADestination.PopulateStrings(AParams);
+    AMessage.PopulateStrings(AParams);
     ExecuteCommand('SendEmail', AParams);
   finally
     AParams.Free;
@@ -418,6 +400,13 @@ end;
 function TksSesMessage.GetSubject: string;
 begin
   Result := FSubject;
+end;
+
+procedure TksSesMessage.PopulateStrings(AStrings: TStrings);
+begin
+  inherited;
+  AStrings.Values['Message.Subject.Data'] := FSubject;
+  AStrings.Values['Message.Body.Text.Data'] := FBody;
 end;
 
 procedure TksSesMessage.SetBody(const Value: string);
@@ -462,26 +451,23 @@ begin
   Result := FRecipients;
 end;
 
-{ TksSesMessageContent }
-
-function TksSesMessageContent.GetCharset: string;
+procedure TksSesMessageDestination.PopulateStrings(AStrings: TStrings);
+var
+  ICount: integer;
 begin
-  Result := FCharset;
+  for ICount := 1 to FRecipients.Count do
+    AStrings.Values['Destination.ToAddresses.member.'+IntToStr(ICount)] := FRecipients[ICount-1];
+  for ICount := 1 to FCcList.Count do
+    AStrings.Values['Destination.CcAddresses.member.'+IntToStr(ICount)] := FCcList[ICount-1];
+  for ICount := 1 to FBccList.Count do
+    AStrings.Values['Destination.BccAddresses.member.'+IntToStr(ICount)] := FBccList[ICount-1];
 end;
 
-function TksSesMessageContent.GetData: string;
-begin
-  Result := FData;
-end;
+{ TksSesBaseObject }
 
-procedure TksSesMessageContent.SetCharset(const Value: string);
+procedure TksSesBaseObject.PopulateStrings(AStrings: TStrings);
 begin
-  FCharset := Value;
-end;
 
-procedure TksSesMessageContent.SetData(const Value: string);
-begin
-  FData := Value;
 end;
 
 end.
