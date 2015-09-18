@@ -45,7 +45,17 @@ type
     SentLast24Hours: Extended;
   end;
 
- IksSesMessageDestination = interface
+  IksSesMessageContent = interface
+  ['{ED3D766F-8848-4DDB-AEC2-64B2BF7E83DD}']
+    function GetCharset: string;
+    function GetData: string;
+    procedure SetCharset(const Value: string);
+    procedure SetData(const Value: string);
+    property Charset: string read GetCharset write SetCharset;
+    property Data: string read GetData write SetData;
+  end;
+
+  IksSesMessageDestination = interface
   ['{E72991E5-8C97-46B3-84BA-39E497FF86D7}']
     function GetBccList: TStrings;
     function GetCcList: TStrings;
@@ -91,6 +101,19 @@ implementation
 uses DateUtils, ComObj, XMLIntf, XMLDoc, synacode;
 
 type
+  TksSesMessageContent = class(TInterfacedObject, IksSesMessageContent)
+  private
+    FCharset: string;
+    FData: string;
+    function GetCharset: string;
+    function GetData: string;
+    procedure SetCharset(const Value: string);
+    procedure SetData(const Value: string);
+  protected
+    property Charset: string read GetCharset write SetCharset;
+    property Data: string read GetData write SetData;
+  end;
+
   TksSesMessageDestination = class(TInterfacedObject, IksSesMessageDestination)
   private
     FBccList: TStrings;
@@ -437,6 +460,28 @@ end;
 function TksSesMessageDestination.GetReipients: TStrings;
 begin
   Result := FRecipients;
+end;
+
+{ TksSesMessageContent }
+
+function TksSesMessageContent.GetCharset: string;
+begin
+  Result := FCharset;
+end;
+
+function TksSesMessageContent.GetData: string;
+begin
+  Result := FData;
+end;
+
+procedure TksSesMessageContent.SetCharset(const Value: string);
+begin
+  FCharset := Value;
+end;
+
+procedure TksSesMessageContent.SetData(const Value: string);
+begin
+  FData := Value;
 end;
 
 end.
